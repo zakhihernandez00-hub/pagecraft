@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pagecraft - web editor</title>
+<style>
+:root{
+  --bg:#12141a; --panel:#181b23; --panel2:#1f232d; --line:#2b303c; --text:#e6e8ee; --dim:#8f96a8;
+  --accent:#7cc4ff; --go:#3ddc97; --go-ink:#06281a; --warn:#ffb454; --bad:#ff6b6b;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:14px/1.4 var(--sans);overflow:hidden}
+button{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:#44495a;background:#262b37}
+button:focus-visible,input:focus-visible,textarea:focus-visible,.row:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.primary{background:var(--go);border-color:var(--go);color:var(--go-ink);font-weight:650}
+button.primary:hover{filter:brightness(1.08);background:var(--go)}
+button.danger{background:var(--bad);border-color:var(--bad);color:#2b0606;font-weight:650}
+button.ghost{background:none;border-color:transparent;padding:4px 8px;color:var(--dim)}
+button.ghost:hover{color:var(--text);background:var(--panel2)}
+button:disabled{opacity:.5;cursor:default}
+input[type=text]{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:7px 10px;width:100%}
+
+#app{display:flex;flex-direction:column;height:100%}
+main{flex:1}
+header{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+.logo{font-weight:750;letter-spacing:.2px;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.logo i{width:18px;height:18px;border-radius:5px;background:linear-gradient(135deg,var(--go),var(--accent));display:inline-block}
+#projName{max-width:220px;background:transparent;border-color:transparent;font-weight:600}
+#projName:hover,#projName:focus{border-color:var(--line);background:var(--bg)}
+.spacer{flex:1}
+#saveState{color:var(--dim);font-size:12px;white-space:nowrap}
+
+#tabs{display:none;background:var(--panel);border-bottom:1px solid var(--line)}
+#tabs button{flex:1;border:0;border-radius:0;background:none;padding:9px;color:var(--dim);border-bottom:2px solid transparent}
+#tabs button.on{color:var(--text);border-bottom-color:var(--go)}
+
+main{display:grid;grid-template-columns:230px minmax(0,1fr) minmax(0,1fr);min-height:0}
+.pane{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--line)}
+.pane:last-child{border-right:0}
+.phead{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line);font-size:12px;color:var(--dim);min-height:36px}
+.phead b{color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.phead .spacer{flex:1}
+
+#tree{flex:1;overflow:auto;padding:6px 4px 40px;user-select:none}
+.row{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.row:hover{background:var(--panel2)}
+.row.sel{background:#243247}
+.row .nm{flex:1;overflow:hidden;text-overflow:ellipsis}
+.row .ic{width:16px;text-align:center;color:var(--dim);font-size:12px;flex:none}
+.row .more{visibility:hidden;padding:0 6px;border:0;background:none;color:var(--dim);line-height:1}
+.row:hover .more,.row.sel .more{visibility:visible}
+@media (hover:none){.row .more{visibility:visible}}
+.hint{color:var(--dim);font-size:12px;padding:10px 12px;border-top:1px solid var(--line)}
+
+#edwrap{flex:1;display:flex;min-height:0;background:var(--bg);position:relative}
+#gutter{flex:none;padding:10px 8px 10px 10px;text-align:right;color:#565d70;font:13px/1.55 var(--mono);overflow:hidden;white-space:pre;min-width:44px;background:var(--panel)}
+#code{flex:1;min-width:0;border:0;outline:0;resize:none;background:transparent;color:var(--text);font:13px/1.55 var(--mono);padding:10px;tab-size:2;white-space:pre;overflow:auto}
+#binview{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--dim);background:var(--bg);padding:20px;text-align:center}
+#binview img{max-width:80%;max-height:70%;image-rendering:pixelated;background:repeating-conic-gradient(#222 0 25%,#2c2c2c 0 50%) 0 0/16px 16px}
+
+#frameWrap{flex:1;min-height:0;background:#fff}
+#frame,#viewFrame{width:100%;height:100%;border:0;display:block;background:#fff}
+#console{flex:none;height:150px;display:flex;flex-direction:column;border-top:1px solid var(--line);background:var(--panel)}
+#console.closed{height:auto}
+#console.closed #logs{display:none}
+#logs{flex:1;overflow:auto;font:12px/1.5 var(--mono);padding:4px 0}
+.log{padding:1px 10px;white-space:pre-wrap;word-break:break-word;border-bottom:1px solid #20242e}
+.log.warn{color:var(--warn)} .log.error{color:var(--bad)} .log.info{color:var(--accent)}
+#logCount{background:var(--panel2);border-radius:9px;padding:0 7px;font-size:11px}
+
+#menu{position:fixed;z-index:50;min-width:180px;background:var(--panel2);border:1px solid #3a4050;border-radius:9px;padding:5px;box-shadow:0 12px 30px rgba(0,0,0,.5);display:none}
+#menu button{display:block;width:100%;text-align:left;border:0;background:none;border-radius:6px;padding:7px 10px}
+#menu button:hover,#menu button:focus{background:#2f3645}
+#menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+#menu .del{color:var(--bad)}
+
+#modal{position:fixed;inset:0;z-index:60;background:rgba(5,6,10,.65);display:none;align-items:center;justify-content:center;padding:16px}
+#modal .box{background:var(--panel);border:1px solid #3a4050;border-radius:12px;padding:18px;width:min(480px,100%);max-height:90vh;overflow:auto}
+#modal h2{margin:0 0 10px;font-size:16px}
+#modal p{margin:8px 0;color:var(--dim)}
+#modal .err{color:var(--bad);min-height:18px;font-size:12px;margin-top:6px}
+#modal .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.linkrow{display:flex;gap:8px;margin:10px 0}
+.site{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+.site .nm{flex:1;min-width:0}
+.site .nm b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.site .nm span{color:var(--dim);font-size:12px}
+
+#viewer{position:fixed;inset:0;display:none;background:#fff}
+#viewMsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;background:var(--bg);color:var(--dim);text-align:center;padding:24px}
+#viewEdit{position:absolute;right:10px;bottom:10px;display:none;opacity:.75;font-size:12px}
+body.viewing #app{display:none}
+body.viewing #viewer{display:block}
+
+@media (max-width:820px){
+  #tabs{display:flex}
+  main{grid-template-columns:1fr}
+  main .pane{display:none;border-right:0}
+  body[data-tab=files] #pFiles,body[data-tab=code] #pCode,body[data-tab=preview] #pPrev{display:flex}
+  #saveState,.logo span{display:none}
+  #projName{max-width:120px}
+}
+</style>
+</head>
+<body data-tab="code">
+<div id="app">
+  <header>
+    <div class="logo"><i></i><span>Pagecraft</span></div>
+    <input id="projName" type="text" aria-label="Project name" maxlength="60">
+    <span id="saveState"></span>
+    <div class="spacer"></div>
+    <button id="btnRun" title="Run (Ctrl+S)">&#9654; Run</button>
+    <button id="btnFull" title="Show your site full screen, without the editor">Full screen</button>
+    <button id="btnSites">My sites</button>
+    <button id="btnNew">New</button>
+    <button id="btnPublish" class="primary">Publish</button>
+  </header>
+  <nav id="tabs">
+    <button data-tab="files">Files</button><button data-tab="code" class="on">Code</button><button data-tab="preview">Preview</button>
+  </nav>
+  <main>
+    <section class="pane" id="pFiles">
+      <div class="phead"><b>Files</b><span class="spacer"></span><button class="ghost" id="btnAdd" title="Add file or folder" aria-label="Add file or folder">+</button></div>
+      <div id="tree" tabindex="0" aria-label="Project files"></div>
+      <div class="hint">Right-click to add, rename or delete files.</div>
+    </section>
+    <section class="pane" id="pCode">
+      <div class="phead"><b id="curName"></b><span class="spacer"></span><label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="autoRun" checked> auto-run</label></div>
+      <div id="edwrap">
+        <div id="gutter" aria-hidden="true">1</div>
+        <textarea id="code" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off" aria-label="Code editor"></textarea>
+        <div id="binview"></div>
+      </div>
+    </section>
+    <section class="pane" id="pPrev">
+      <div class="phead"><span>Preview:</span><b id="prevName"></b></div>
+      <div id="frameWrap"><iframe id="frame" title="Preview" allow="fullscreen; autoplay; gamepad" allowfullscreen sandbox="allow-scripts allow-forms allow-pointer-lock allow-modals allow-popups allow-downloads"></iframe></div>
+      <div id="console">
+        <div class="phead"><b>Console</b><span id="logCount">0</span><span class="spacer"></span><button class="ghost" id="logClear">Clear</button><button class="ghost" id="logToggle">Hide</button></div>
+        <div id="logs" role="log"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="viewer">
+  <iframe id="viewFrame" title="Published site" allow="fullscreen; autoplay; gamepad" allowfullscreen sandbox="allow-scripts allow-forms allow-pointer-lock allow-modals allow-popups allow-downloads"></iframe>
+  <div id="viewMsg"></div>
+  <button id="viewEdit">Open editor</button>
+</div>
+
+<div id="menu" role="menu"></div>
+<div id="modal" role="dialog" aria-modal="true"><div class="box" id="modalBox"></div></div>
+<input type="file" id="filePick" multiple hidden>
+
+<script>
+(function(){
+'use strict';
+/* SETUP: paste your Firebase Realtime Database address between the quotes, like
+   'https://your-project-default-rtdb.firebaseio.com' */
+var DB_URL='https://index-11d61-default-rtdb.firebaseio.com';
+var MAX_SITE=10*1024*1024;
+/* SETUP: the web address where this Pagecraft page is hosted, like 'https://my-pagecraft.netlify.app/'.
+   Published links point here. Leave empty to use whatever address the page is opened from. */
+var HOME_URL='';
+var TEXT_EXT=['html','htm','css','js','mjs','json','txt','md','svg','xml','csv'];
+var MIME={html:'text/html',htm:'text/html',css:'text/css',js:'text/javascript',mjs:'text/javascript',json:'application/json',txt:'text/plain',md:'text/plain',svg:'image/svg+xml',xml:'application/xml',csv:'text/csv',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',ico:'image/x-icon',mp3:'audio/mpeg',wav:'audio/wav',ogg:'audio/ogg',mp4:'video/mp4',webm:'video/webm',woff:'font/woff',woff2:'font/woff2',ttf:'font/ttf'};
+var CHUNK=60000, MAX_UPLOAD=4*1024*1024;
+var $=function(id){return document.getElementById(id)};
+var el=function(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
+var ext=function(p){var i=p.lastIndexOf('.');return i<0?'':p.slice(i+1).toLowerCase()};
+var mime=function(p){return MIME[ext(p)]||'application/octet-stream'};
+var isHtml=function(p){return /\.html?$/i.test(p)};
+var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms)})};
+
+/* ---------- storage helpers (may be unavailable) ---------- */
+function lsGet(k){try{var v=localStorage.getItem(k);return v==null?null:JSON.parse(v)}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}
+
+/* ---------- project state ---------- */
+function starter(){
+  return {name:'My site',siteId:null,open:'index.html',folders:[],files:{
+    'index.html':{content:'<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="utf-8">\n  <title>My site</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>Hello!</h1>\n  <p>Paste your own index.html here, or start editing.</p>\n  <button id="btn">Click me</button>\n  <script src="script.js"><\/script>\n</body>\n</html>\n'},
+    'style.css':{content:'body {\n  font-family: system-ui, sans-serif;\n  max-width: 640px;\n  margin: 40px auto;\n  padding: 0 16px;\n}\n\nbutton {\n  padding: 8px 16px;\n  font-size: 16px;\n}\n'},
+    'script.js':{content:'let clicks = 0;\n\ndocument.getElementById("btn").addEventListener("click", () => {\n  clicks++;\n  console.log("Clicked " + clicks + " time(s)");\n});\n'}
+  }};
+}
+var S=(function(){var s=lsGet('pc:project');return (s&&s.files&&typeof s.files==='object')?s:starter()})();
+if(!Array.isArray(S.folders))S.folders=[];
+var collapsed={}, previewPath=null, saveT=null, runT=null;
+
+function save(){
+  $('saveState').textContent='Saving...';
+  clearTimeout(saveT);
+  saveT=setTimeout(function(){
+    S.savedAt=Date.now();
+    var small=lsSet('pc:project',S),done=function(ok){$('saveState').textContent=ok?'Saved in this browser':'Not saved (browser storage full or off)'};
+    idbSet('project',S).then(function(){done(true)},function(){done(small)});
+  },400);
+}
+/* big projects (games, images) do not fit in localStorage, so the project is also kept in IndexedDB */
+function idb(){
+  return new Promise(function(res,rej){
+    try{var r=indexedDB.open('pagecraft',1);
+      r.onupgradeneeded=function(){r.result.createObjectStore('kv')};
+      r.onsuccess=function(){res(r.result)};r.onerror=function(){rej(r.error)};
+    }catch(e){rej(e)}
+  });
+}
+function idbSet(k,v){
+  return idb().then(function(d){return new Promise(function(res,rej){
+    var t=d.transaction('kv','readwrite');t.objectStore('kv').put(v,k);
+    t.oncomplete=function(){d.close();res()};t.onerror=t.onabort=function(){d.close();rej(t.error)};
+  })});
+}
+function idbGet(k){
+  return idb().then(function(d){return new Promise(function(res,rej){
+    var q=d.transaction('kv','readonly').objectStore('kv').get(k);
+    q.onsuccess=function(){d.close();res(q.result)};q.onerror=function(){d.close();rej(q.error)};
+  })});
+}
+
+/* ---------- path helpers ---------- */
+function resolvePath(files,base,u){
+  if(u==null)return null;u=String(u).trim();
+  if(!u||/^([a-z][a-z0-9+.-]*:|\/\/|#)/i.test(u))return null;
+  u=u.split('#')[0].split('?')[0];
+  try{u=decodeURIComponent(u)}catch(e){}
+  var segs=(u.charAt(0)==='/'?u:base+u).split('/'),o=[];
+  for(var i=0;i<segs.length;i++){var s=segs[i];if(!s||s==='.')continue;if(s==='..')o.pop();else o.push(s)}
+  var k=o.join('/');
+  return Object.prototype.hasOwnProperty.call(files,k)?k:null;
+}
+function dirOf(p){var i=p.lastIndexOf('/');return i<0?'':p.slice(0,i+1)}
+function dataUrl(files,k){var f=files[k];return f.bin?f.content:'data:'+mime(k)+';charset=utf-8,'+encodeURIComponent(f.content)}
+function cleanPath(p){
+  p=String(p||'').trim().replace(/\\/g,'/').replace(/^\/+|\/+$/g,'');
+  if(!p)return {err:'Type a name.'};
+  var segs=p.split('/');
+  for(var i=0;i<segs.length;i++){
+    if(!/^[\w.\- ]+$/.test(segs[i])||segs[i]==='.'||segs[i]==='..')return {err:'Use letters, numbers, spaces, dots, dashes and underscores.'};
+  }
+  return {path:segs.join('/')};
+}
+function taken(p){
+  if(S.files[p]||S.folders.indexOf(p)>=0)return true;
+  return Object.keys(S.files).some(function(k){return k.indexOf(p+'/')===0});
+}
+
+/* ---------- the script injected into every previewed / published page ---------- */
+function shim(F,BASE,LS){
+  var has=function(k){return Object.prototype.hasOwnProperty.call(F,k)};
+  var post=function(m){m.__pc=1;try{parent.postMessage(m,'*')}catch(e){}};
+  function res(u){
+    if(u==null)return null;u=String(u).trim();
+    if(!u||/^([a-z][a-z0-9+.-]*:|\/\/|#)/i.test(u))return null;
+    u=u.split('#')[0].split('?')[0];
+    try{u=decodeURIComponent(u)}catch(e){}
+    var segs=(u.charAt(0)==='/'?u:BASE+u).split('/'),o=[];
+    for(var i=0;i<segs.length;i++){var s=segs[i];if(!s||s==='.')continue;if(s==='..')o.pop();else o.push(s)}
+    var k=o.join('/');return has(k)?k:null;
+  }
+  function url(k){var f=F[k];return f.b?f.c:'data:'+f.m+';charset=utf-8,'+encodeURIComponent(f.c)}
+  function blob(k){
+    var f=F[k];if(!f.b)return new Blob([f.c],{type:f.m});
+    var i=f.c.indexOf(','),bin=atob(f.c.slice(i+1)),a=new Uint8Array(bin.length);
+    for(var j=0;j<bin.length;j++)a[j]=bin.charCodeAt(j);
+    return new Blob([a],{type:f.m});
+  }
+  /* storage that works inside the sandbox and is remembered by the host page */
+  var store=LS||{},q=null,syncT=null;
+  function queue(){if(!q)q={type:'ls',set:{},del:[],clear:0};clearTimeout(syncT);syncT=setTimeout(function(){var m=q;q=null;post(m)},300);return q}
+  function mk(st,persist){return {
+    getItem:function(k){k=String(k);return Object.prototype.hasOwnProperty.call(st,k)?st[k]:null},
+    setItem:function(k,v){k=String(k);v=String(v);st[k]=v;if(persist){var m=queue();m.set[k]=v;var i=m.del.indexOf(k);if(i>=0)m.del.splice(i,1)}},
+    removeItem:function(k){k=String(k);delete st[k];if(persist){var m=queue();delete m.set[k];m.del.push(k)}},
+    clear:function(){for(var k in st)delete st[k];if(persist){var m=queue();m.set={};m.del=[];m.clear=1}},
+    key:function(i){return Object.keys(st)[i]||null},
+    get length(){return Object.keys(st).length}
+  }}
+  try{Object.defineProperty(window,'localStorage',{value:mk(store,true),configurable:true})}catch(e){}
+  try{Object.defineProperty(window,'sessionStorage',{value:mk({},false),configurable:true})}catch(e){}
+  /* console + errors */
+  function fmt(a){
+    if(typeof a==='string')return a;
+    if(a instanceof Error)return a.stack||(a.name+': '+a.message);
+    try{var s=JSON.stringify(a);return s===undefined?String(a):s}catch(e){return String(a)}
+  }
+  ['log','info','warn','error','debug'].forEach(function(l){
+    var o=console[l];
+    console[l]=function(){
+      var t=[];for(var i=0;i<arguments.length;i++)t.push(fmt(arguments[i]));
+      post({type:'log',level:l==='debug'?'log':l,text:t.join(' ')});
+      if(o)o.apply(console,arguments);
+    };
+  });
+  window.addEventListener('error',function(e){
+    if(e.message)post({type:'log',level:'error',text:e.message+(e.lineno?' (line '+e.lineno+')':'')});
+  });
+  window.addEventListener('unhandledrejection',function(e){post({type:'log',level:'error',text:'Unhandled promise rejection: '+fmt(e.reason)})});
+  /* make project files reachable from script: img.src, new Audio(), fetch() */
+  [window.HTMLImageElement,window.HTMLMediaElement,window.HTMLSourceElement].forEach(function(C){
+    if(!C)return;var d=Object.getOwnPropertyDescriptor(C.prototype,'src');if(!d||!d.set)return;
+    Object.defineProperty(C.prototype,'src',{get:d.get,set:function(v){var k=res(v);d.set.call(this,k?url(k):v)},configurable:true,enumerable:true});
+  });
+  var sd=Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype,'src');
+  if(sd&&sd.set)Object.defineProperty(HTMLScriptElement.prototype,'src',{get:sd.get,set:function(v){
+    var k=res(v);if(!k){sd.set.call(this,v);return}
+    var me=this;me.textContent=F[k].c;setTimeout(function(){me.dispatchEvent(new Event('load'))},0);
+  },configurable:true,enumerable:true});
+  var sa=Element.prototype.setAttribute;
+  Element.prototype.setAttribute=function(n,v){
+    if(String(n).toLowerCase()==='src'&&this.tagName==='IFRAME'){var f=res(v);if(f&&/\.html?$/i.test(f)){loadFrame(this,f);return}}
+    if(String(n).toLowerCase()==='src'&&/^(IMG|AUDIO|VIDEO|SOURCE)$/.test(this.tagName)){var k=res(v);if(k)v=url(k)}
+    return sa.call(this,n,v);
+  };
+  var of=window.fetch;
+  window.fetch=function(u,o){
+    var k=res(typeof u==='string'?u:(u&&u.url));
+    if(k)return Promise.resolve(new Response(blob(k),{status:200,headers:{'Content-Type':F[k].m}}));
+    return of?of.call(window,u,o):Promise.reject(new TypeError('fetch unavailable'));
+  };
+  /* iframes that show another HTML file of the project (like a game page inside a hub) */
+  var pend={},relay={},seq=0,me=Math.random().toString(36).slice(2);
+  function loadFrame(fr,k){var id=me+'-'+(++seq);fr.__pcWant=id;pend[id]=fr;post({type:'frame',path:k,id:id})}
+  var fd=Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype,'src');
+  if(fd&&fd.set)Object.defineProperty(HTMLIFrameElement.prototype,'src',{get:fd.get,set:function(v){
+    var k=res(v);if(k&&/\.html?$/i.test(k))loadFrame(this,k);else{this.__pcWant=null;fd.set.call(this,v)}
+  },configurable:true,enumerable:true});
+  var ra=Element.prototype.removeAttribute;
+  Element.prototype.removeAttribute=function(n){
+    if(this.tagName==='IFRAME'&&/^src(doc)?$/i.test(String(n)))this.__pcWant=null;
+    return ra.call(this,n);
+  };
+  function staticFrames(){
+    var l=document.querySelectorAll('iframe[data-pc-src]');
+    for(var i=0;i<l.length;i++){var k=res(l[i].getAttribute('data-pc-src'));ra.call(l[i],'data-pc-src');if(k)loadFrame(l[i],k)}
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',staticFrames);else staticFrames();
+  window.addEventListener('message',function(e){
+    var m=e.data;if(!m||typeof m!=='object')return;
+    if(m.__pcr===1&&e.source===parent&&parent!==window){
+      e.stopImmediatePropagation();
+      if(pend[m.id]){var fr=pend[m.id];delete pend[m.id];if(m.html!=null&&fr.__pcWant===m.id)fr.srcdoc=m.html}
+      else if(relay[m.id]){var w=relay[m.id];delete relay[m.id];try{w.postMessage(m,'*')}catch(x){}}
+      return;
+    }
+    if(m.__pc===1&&e.source!==parent){
+      e.stopImmediatePropagation();
+      if(m.type==='nav'){
+        var fs=document.querySelectorAll('iframe');
+        for(var i=0;i<fs.length;i++)if(fs[i].contentWindow===e.source){loadFrame(fs[i],m.path);break}
+        return;
+      }
+      if(m.type==='frame')relay[m.id]=e.source;
+      try{parent.postMessage(m,'*')}catch(x){}
+    }
+  });
+  /* links between the project's own pages */
+  document.addEventListener('click',function(e){
+    var a=e.target&&e.target.closest?e.target.closest('a[href]'):null;if(!a)return;
+    var k=res(a.getAttribute('href'));
+    if(k&&/\.html?$/i.test(k)){e.preventDefault();post({type:'nav',path:k})}
+  },true);
+}
+
+/* ---------- bundling: one self-contained document from the project files ---------- */
+function inlineCss(files,cssPath,css){
+  var base=dirOf(cssPath);
+  return css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g,function(m,q,u){
+    var k=resolvePath(files,base,u);return k?'url("'+dataUrl(files,k)+'")':m;
+  });
+}
+function bundle(files,path,lsData){
+  var base=dirOf(path);
+  var doc=new DOMParser().parseFromString(files[path].content,'text/html');
+  var R=function(u){return resolvePath(files,base,u)};
+  Array.prototype.slice.call(doc.querySelectorAll('link[href]')).forEach(function(l){
+    var k=R(l.getAttribute('href'));if(!k)return;
+    if(/stylesheet/i.test(l.getAttribute('rel')||'')){
+      var s=doc.createElement('style');s.textContent=inlineCss(files,k,files[k].content);l.replaceWith(s);
+    }else l.setAttribute('href',dataUrl(files,k));
+  });
+  Array.prototype.slice.call(doc.querySelectorAll('style')).forEach(function(s){s.textContent=inlineCss(files,path,s.textContent)});
+  Array.prototype.slice.call(doc.querySelectorAll('script[src]')).forEach(function(s){
+    var k=R(s.getAttribute('src'));if(!k)return;
+    var n=doc.createElement('script');
+    Array.prototype.slice.call(s.attributes).forEach(function(a){if(a.name!=='src')n.setAttribute(a.name,a.value)});
+    n.textContent=files[k].content.replace(/<\/script/gi,'<\\/script').replace(/<\x21--/g,'<\\!--');
+    s.replaceWith(n);
+  });
+  Array.prototype.slice.call(doc.querySelectorAll('img[src],audio[src],video[src],source[src],video[poster]')).forEach(function(n){
+    ['src','poster'].forEach(function(a){var v=n.getAttribute(a);if(v==null)return;var k=R(v);if(k)n.setAttribute(a,dataUrl(files,k))});
+  });
+  Array.prototype.slice.call(doc.querySelectorAll('iframe[src]')).forEach(function(n){
+    var v=n.getAttribute('src'),k=R(v);if(k&&isHtml(k)){n.setAttribute('data-pc-src',v);n.removeAttribute('src')}
+  });
+  var F={};Object.keys(files).forEach(function(k){F[k]={c:files[k].content,b:files[k].bin?1:0,m:mime(k)}});
+  var js='('+shim.toString()+')('+JSON.stringify(F)+','+JSON.stringify(base)+','+JSON.stringify(lsData||{})+');';
+  var sc=doc.createElement('script');sc.textContent=js.replace(/<\/script/gi,'<\\/script').replace(/<\x21--/g,'<\\!--');
+  doc.head.insertBefore(sc,doc.head.firstChild);
+  return '<!DOCTYPE html>\n'+doc.documentElement.outerHTML;
+}
+
+/* ---------- preview ---------- */
+function pickPreview(){
+  if(S.open&&S.files[S.open]&&isHtml(S.open))previewPath=S.open;
+  if(!previewPath||!S.files[previewPath]){
+    previewPath=S.files['index.html']?'index.html':(Object.keys(S.files).filter(isHtml).sort()[0]||null);
+  }
+}
+function run(){
+  clearTimeout(runT);pickPreview();clearLogs();
+  $('prevName').textContent=previewPath||'no HTML file';
+  if(!previewPath){$('frame').srcdoc='<p style="font:14px system-ui;padding:20px;color:#555">Add an index.html to see a preview.</p>';return}
+  try{$('frame').srcdoc=bundle(S.files,previewPath,previewLS)}
+  catch(e){addLog('error','Could not build the preview: '+e.message)}
+}
+function queueRun(){if(!$('autoRun').checked)return;clearTimeout(runT);runT=setTimeout(run,700)}
+
+var logN=0;
+function clearLogs(){$('logs').textContent='';logN=0;$('logCount').textContent='0'}
+function addLog(level,text){
+  var box=$('logs');if(box.childNodes.length>300)box.removeChild(box.firstChild);
+  box.appendChild(el('div','log '+level,String(text).slice(0,4000)));box.scrollTop=box.scrollHeight;
+  $('logCount').textContent=String(++logN);
+}
+
+/* answers what a previewed page asks its host for: saved storage, and other HTML files for its iframes */
+function hostMsg(m,src,ctx){
+  var k;
+  if(m.type==='ls'){
+    if(m.clear)for(k in ctx.ls)delete ctx.ls[k];
+    if(m.set)for(k in m.set)ctx.ls[k]=String(m.set[k]);
+    if(m.del)for(var i=0;i<m.del.length;i++)delete ctx.ls[m.del[i]];
+    if(ctx.save)ctx.save();
+    return true;
+  }
+  if(m.type==='frame'){
+    var html=null;
+    if(Object.prototype.hasOwnProperty.call(ctx.files,m.path)){try{html=bundle(ctx.files,m.path,ctx.ls)}catch(e){}}
+    try{src.postMessage({__pcr:1,id:m.id,html:html},'*')}catch(e){}
+    return true;
+  }
+  return false;
+}
+var previewLS=lsGet('pc:ls:preview')||{};
+var viewing=null; /* {id, files, path, ls} when showing a site full screen */
+window.addEventListener('message',function(e){
+  var m=e.data;if(!m||m.__pc!==1)return;
+  if(e.source===$('frame').contentWindow){
+    if(m.type==='log')addLog(m.level,m.text);
+    else if(m.type==='nav'){if(S.files[m.path]){previewPath=m.path;if(isHtml(S.open))openFile(m.path);else run()}}
+    else hostMsg(m,e.source,{files:S.files,ls:previewLS,save:function(){lsSet('pc:ls:preview',previewLS)}});
+  }else if(viewing&&e.source===$('viewFrame').contentWindow){
+    var v=viewing;
+    if(m.type==='nav'){if(v.files[m.path]){v.path=m.path;$('viewFrame').srcdoc=bundle(v.files,m.path,v.ls)}}
+    else hostMsg(m,e.source,{files:v.files,ls:v.ls,save:function(){lsSet('pc:ls:'+v.id,v.ls)}});
+  }
+});
+
+/* ---------- editor ---------- */
+var code=$('code'),gutter=$('gutter');
+function lines(){
+  var n=1,v=code.value;for(var i=0;i<v.length;i++)if(v.charCodeAt(i)===10)n++;
+  var a=new Array(n);for(var j=0;j<n;j++)a[j]=j+1;gutter.textContent=a.join('\n');gutter.scrollTop=code.scrollTop;
+}
+function openFile(p){
+  if(!S.files[p])p=S.files['index.html']?'index.html':(Object.keys(S.files).sort()[0]||null);
+  S.open=p;var f=p?S.files[p]:null,bv=$('binview');
+  $('curName').textContent=p||'No file open';
+  bv.textContent='';
+  if(!f){code.value='';code.disabled=true;bv.style.display='flex';bv.appendChild(el('div',null,'Right-click the file list to add a file.'))}
+  else if(f.bin){
+    code.value='';code.disabled=true;bv.style.display='flex';
+    if(/^image\//.test(mime(p))){var im=el('img');im.alt=p;im.src=f.content;bv.appendChild(im)}
+    bv.appendChild(el('div',null,p+' - use it in your code as "'+p+'"'));
+  }else{bv.style.display='none';code.disabled=false;code.value=f.content;code.scrollTop=0}
+  lines();renderTree();save();run();
+}
+code.addEventListener('input',function(){
+  var f=S.files[S.open];if(!f||f.bin)return;f.content=code.value;lines();save();queueRun();
+});
+code.addEventListener('scroll',function(){gutter.scrollTop=code.scrollTop});
+function insert(text){
+  var s=code.selectionStart,e=code.selectionEnd;
+  if(!document.execCommand||!document.execCommand('insertText',false,text)){
+    code.value=code.value.slice(0,s)+text+code.value.slice(e);code.selectionStart=code.selectionEnd=s+text.length;
+    code.dispatchEvent(new Event('input'));
+  }
+}
+code.addEventListener('keydown',function(e){
+  if(e.key==='Tab'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();insert('  ')}
+  else if(e.key==='Enter'&&!e.shiftKey&&!e.ctrlKey&&!e.metaKey){
+    var before=code.value.slice(0,code.selectionStart),ln=before.slice(before.lastIndexOf('\n')+1);
+    var ind=(/^[ \t]*/.exec(ln)||[''])[0];if(/[{>(\[]$/.test(ln.trim())&&!/<\/[^>]+>$/.test(ln.trim()))ind+='  ';
+    if(ind){e.preventDefault();insert('\n'+ind)}
+  }
+});
+document.addEventListener('keydown',function(e){
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();save();run()}
+  if(e.key==='Escape'){hideMenu()}
+});
+
+/* ---------- file tree ---------- */
+function buildTree(){
+  var root={d:{},f:[]};
+  var add=function(p){var n=root;p.split('/').forEach(function(s){n=n.d[s]||(n.d[s]={d:{},f:[]})});return n};
+  S.folders.forEach(add);
+  Object.keys(S.files).forEach(function(p){var i=p.lastIndexOf('/');(i<0?root:add(p.slice(0,i))).f.push(p)});
+  return root;
+}
+function renderTree(){
+  var t=$('tree');t.textContent='';
+  (function walk(node,prefix,depth){
+    Object.keys(node.d).sort().forEach(function(name){
+      var path=prefix+name,open=!collapsed[path];
+      var r=row(open?'▾':'▸',name,depth,{type:'folder',path:path});
+      r.addEventListener('click',function(){collapsed[path]=open;renderTree()});
+      t.appendChild(r);if(open)walk(node.d[name],path+'/',depth+1);
+    });
+    node.f.sort().forEach(function(p){
+      var r=row(S.files[p].bin?'▣':'•',p.slice(prefix.length),depth,{type:'file',path:p});
+      if(p===S.open)r.classList.add('sel');
+      r.addEventListener('click',function(){openFile(p);setTab('code')});
+      t.appendChild(r);
+    });
+  })(buildTree(),'',0);
+}
+function row(icon,name,depth,target){
+  var r=el('div','row');r.style.paddingLeft=(6+depth*14)+'px';r.tabIndex=0;r._target=target;
+  r.appendChild(el('span','ic',icon));r.appendChild(el('span','nm',name));
+  var more=el('button','more','⋯');more.setAttribute('aria-label','Actions for '+name);
+  more.addEventListener('click',function(e){e.stopPropagation();var b=more.getBoundingClientRect();showMenu(b.left,b.bottom,target)});
+  r.appendChild(more);
+  r.addEventListener('keydown',function(e){if(e.key==='Enter'){r.click()}});
+  return r;
+}
+$('tree').addEventListener('contextmenu',function(e){
+  e.preventDefault();
+  var r=e.target.closest?e.target.closest('.row'):null;
+  showMenu(e.clientX,e.clientY,r?r._target:{type:'root',path:''});
+});
+$('btnAdd').addEventListener('click',function(){var b=$('btnAdd').getBoundingClientRect();showMenu(b.left,b.bottom,{type:'root',path:''})});
+
+/* ---------- context menu ---------- */
+function showMenu(x,y,target){
+  var m=$('menu');m.textContent='';
+  var item=function(label,fn,cls){var b=el('button',cls,label);b.setAttribute('role','menuitem');b.addEventListener('click',function(){hideMenu();fn()});m.appendChild(b)};
+  var dir=target.type==='folder'?target.path+'/':target.type==='file'?dirOf(target.path):'';
+  item('New file',function(){newFile(dir)});
+  item('New folder',function(){newFolder(dir)});
+  item('Upload files (images, sounds...)',function(){upload(dir)});
+  if(target.type!=='root'){
+    m.appendChild(el('hr'));
+    item('Rename / move',function(){rename(target)});
+    if(target.type==='file')item('Duplicate',function(){duplicate(target.path)});
+    item('Delete',function(){remove(target)},'del');
+  }
+  m.style.display='block';
+  var w=m.offsetWidth,h=m.offsetHeight;
+  m.style.left=Math.max(4,Math.min(x,innerWidth-w-4))+'px';m.style.top=Math.max(4,Math.min(y,innerHeight-h-4))+'px';
+  var first=m.querySelector('button');if(first)first.focus();
+}
+function hideMenu(){$('menu').style.display='none'}
+document.addEventListener('pointerdown',function(e){if(!$('menu').contains(e.target))hideMenu()});
+window.addEventListener('blur',hideMenu);
+
+/* ---------- modal ---------- */
+var modalClose=null;
+function openModal(build){
+  var box=$('modalBox');box.textContent='';$('modal').style.display='flex';
+  return new Promise(function(resolve){
+    modalClose=function(v){$('modal').style.display='none';modalClose=null;resolve(v)};
+    build(box,modalClose);
+  });
+}
+$('modal').addEventListener('pointerdown',function(e){if(e.target===$('modal')&&modalClose)modalClose(null)});
+$('modal').addEventListener('keydown',function(e){if(e.key==='Escape'&&modalClose)modalClose(null)});
+function ask(o){
+  return openModal(function(box,close){
+    box.appendChild(el('h2',null,o.title));
+    if(o.text)box.appendChild(el('p',null,o.text));
+    var inp=null,err=el('div','err');
+    if(o.input!=null){inp=el('input');inp.type='text';inp.value=o.input;box.appendChild(inp);box.appendChild(err)}
+    var btns=el('div','btns'),cancel=el('button',null,'Cancel'),ok=el('button',o.danger?'danger':'primary',o.ok||'OK');
+    btns.appendChild(cancel);btns.appendChild(ok);box.appendChild(btns);
+    var go=function(){
+      if(!inp){close(true);return}
+      var r=o.check?o.check(inp.value):null;if(r){err.textContent=r;return}close(inp.value);
+    };
+    cancel.addEventListener('click',function(){close(null)});ok.addEventListener('click',go);
+    if(inp){inp.addEventListener('keydown',function(e){if(e.key==='Enter')go()});inp.focus();
+      var dot=inp.value.lastIndexOf('.'),sl=inp.value.lastIndexOf('/')+1;inp.setSelectionRange(sl,dot>sl?dot:inp.value.length)}
+    else ok.focus();
+  });
+}
+
+/* ---------- file actions ---------- */
+function template(p){
+  if(isHtml(p))return '<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="utf-8">\n  <title>'+p.replace(/^.*\//,'').replace(/\.html?$/i,'')+'</title>\n</head>\n<body>\n\n</body>\n</html>\n';
+  return '';
+}
+function checkNew(dir){return function(v){var c=cleanPath(dir+v);if(c.err)return c.err;if(taken(c.path))return 'That name is already used.';return null}}
+function dropFolderMarks(p){ /* a folder that now has content no longer needs its empty-folder marker */
+  S.folders=S.folders.filter(function(f){return !(p===f||p.indexOf(f+'/')===0)});
+}
+function newFile(dir){
+  ask({title:'New file'+(dir?' in '+dir:''),input:'page.html',ok:'Create',check:checkNew(dir)}).then(function(v){
+    if(v==null)return;var p=cleanPath(dir+v).path;
+    if(!ext(p))p+='.html';
+    if(TEXT_EXT.indexOf(ext(p))<0&&MIME[ext(p)]){ask({title:'Use Upload for that',text:'Files like .'+ext(p)+' need to be uploaded rather than typed. Right-click and choose Upload files.',ok:'OK'});return}
+    if(taken(p))return;
+    S.files[p]={content:template(p)};dropFolderMarks(p);delete collapsed[dir.replace(/\/$/,'')];openFile(p);setTab('code');code.focus();
+  });
+}
+function newFolder(dir){
+  ask({title:'New folder'+(dir?' in '+dir:''),input:'assets',ok:'Create',check:checkNew(dir)}).then(function(v){
+    if(v==null)return;var p=cleanPath(dir+v).path;dropFolderMarks(p);S.folders.push(p);save();renderTree();
+  });
+}
+var uploadDir='';
+function upload(dir){uploadDir=dir;$('filePick').value='';$('filePick').click()}
+$('filePick').addEventListener('change',function(){
+  var list=Array.prototype.slice.call($('filePick').files||[]),skipped=[],last=null;
+  Promise.all(list.map(function(file){
+    return new Promise(function(done){
+      var c=cleanPath(uploadDir+file.name.replace(/[^\w.\- ]/g,'_'));
+      if(c.err||file.size>MAX_UPLOAD){skipped.push(file.name);done();return}
+      var text=TEXT_EXT.indexOf(ext(c.path))>=0,rd=new FileReader();
+      rd.onload=function(){S.files[c.path]=text?{content:String(rd.result)}:{content:String(rd.result),bin:1};dropFolderMarks(c.path);last=c.path;done()};
+      rd.onerror=function(){skipped.push(file.name);done()};
+      if(text)rd.readAsText(file);else rd.readAsDataURL(file);
+    });
+  })).then(function(){
+    if(last)openFile(last);
+    if(skipped.length)ask({title:'Some files were skipped',text:skipped.join(', ')+' - files must be under 4 MB.',ok:'OK'});
+  });
+});
+function rename(t){
+  ask({title:'Rename or move',text:'Type a new name. Add a folder in front (like css/style.css) to move it.',input:t.path,ok:'Rename',
+    check:function(v){var c=cleanPath(v);if(c.err)return c.err;if(c.path===t.path)return null;
+      if(t.type==='folder'&&c.path.indexOf(t.path+'/')===0)return 'A folder cannot move inside itself.';
+      if(taken(c.path))return 'That name is already used.';return null}
+  }).then(function(v){
+    if(v==null)return;var np=cleanPath(v).path;if(np===t.path)return;
+    var move=function(a,b){S.files[b]=S.files[a];delete S.files[a];if(S.open===a)S.open=b;if(previewPath===a)previewPath=b};
+    if(t.type==='file')move(t.path,np);
+    else{
+      Object.keys(S.files).forEach(function(k){if(k.indexOf(t.path+'/')===0)move(k,np+k.slice(t.path.length))});
+      S.folders=S.folders.map(function(f){return f===t.path?np:f.indexOf(t.path+'/')===0?np+f.slice(t.path.length):f});
+      if(S.folders.indexOf(np)<0&&!Object.keys(S.files).some(function(k){return k.indexOf(np+'/')===0}))S.folders.push(np);
+    }
+    dropFolderMarks(np+(t.type==='file'?'':'/x'));
+    openFile(S.open);
+  });
+}
+function duplicate(p){
+  var i=p.lastIndexOf('.'),a=i>p.lastIndexOf('/')?p.slice(0,i):p,b=i>p.lastIndexOf('/')?p.slice(i):'',n=2,np;
+  do{np=a+'-'+(n++)+b}while(taken(np));
+  S.files[np]={content:S.files[p].content};if(S.files[p].bin)S.files[np].bin=1;openFile(np);
+}
+function remove(t){
+  var n=t.type==='folder'?Object.keys(S.files).filter(function(k){return k.indexOf(t.path+'/')===0}).length:0;
+  ask({title:'Delete '+t.path+'?',text:t.type==='folder'?'This deletes the folder and the '+n+' file(s) inside it.':'This cannot be undone.',ok:'Delete',danger:true}).then(function(v){
+    if(!v)return;
+    if(t.type==='file')delete S.files[t.path];
+    else{
+      Object.keys(S.files).forEach(function(k){if(k.indexOf(t.path+'/')===0)delete S.files[k]});
+      S.folders=S.folders.filter(function(f){return f!==t.path&&f.indexOf(t.path+'/')!==0});
+    }
+    openFile(S.open);
+  });
+}
+
+/* ---------- publishing (Firebase Realtime Database, REST) ---------- */
+function dbReady(){return /^https:\/\/.+/.test(DB_URL)}
+function mySites(){return lsGet('pc:sites')||{}}
+function newId(){var c='abcdefghijkmnpqrstuvwxyz23456789',s='';for(var i=0;i<8;i++)s+=c.charAt(Math.floor(Math.random()*c.length));return s}
+function newKey(){var a=new Uint8Array(18),s='';(window.crypto||window.msCrypto).getRandomValues(a);for(var i=0;i<a.length;i++)s+=('0'+a[i].toString(16)).slice(-2);return s}
+function homeUrl(){return HOME_URL?HOME_URL.split('#')[0]:location.href.split('#')[0]}
+function linkWorks(){return /^https?:\/\//i.test(homeUrl())&&(!!HOME_URL||window.top===window)}
+function siteLink(id){return homeUrl()+'#site-'+id}
+function rest(method,path,body){
+  var o={method:method};
+  if(body!==undefined){o.headers={'Content-Type':'application/json'};o.body=JSON.stringify(body)}
+  return fetch(DB_URL.replace(/\/+$/,'')+'/pagecraft/sites/'+path+'.json',o).then(function(r){
+    if(!r.ok){var e=new Error('HTTP '+r.status);e.status=r.status;throw e}
+    return r.json();
+  });
+}
+function errText(e){
+  if(e&&(e.status===401||e.status===403))return 'The database refused. Check that the Pagecraft rules were added in Firebase (Realtime Database > Rules).';
+  if(e&&e.status===404)return 'Database not found. Check the DB_URL line at the top of the script.';
+  if(e&&e.status)return 'The database answered with an error ('+e.status+'). Try again.';
+  if(e instanceof TypeError)return 'Could not reach the database. Check your connection, or whether this network blocks firebaseio.com.';
+  return (e&&e.message)||'Something went wrong. Try again.';
+}
+async function publishSite(status){
+  if(!dbReady())throw new Error('Publishing is not set up yet. The site owner needs to put their Firebase database address in the DB_URL line at the top of the script.');
+  if(!S.files['index.html'])throw new Error('Add an index.html first - that is the page your link opens.');
+  var list=Object.keys(S.files).sort().map(function(p){var f={p:p,c:S.files[p].content||''};if(S.files[p].bin)f.b=1;return f});
+  if(JSON.stringify(list).length>MAX_SITE)throw new Error('This project is too big to publish (10 MB max). Remove some large files.');
+  var mine=mySites(),id=(S.siteId&&mine[S.siteId])?S.siteId:newId(),key=mine[id]?mine[id].key:newKey();
+  status('Uploading...');
+  await rest('PUT',id,{key:key,pub:{name:S.name||'My site',updated:Date.now(),files:list}});
+  mine[id]={key:key,name:S.name||'My site',updated:Date.now()};lsSet('pc:sites',mine);
+  S.siteId=id;save();return id;
+}
+async function loadSite(id){
+  var pub=await rest('GET',id+'/pub');if(!pub||!Array.isArray(pub.files))return null;
+  var files={};pub.files.forEach(function(f){if(!f||typeof f.p!=='string')return;files[f.p]={content:String(f.c||'')};if(f.b)files[f.p].bin=1});
+  return {name:pub.name||'Site',files:files};
+}
+async function deleteSite(id){
+  var mine=mySites();if(!mine[id])return;
+  await rest('PUT',id,{key:mine[id].key});
+  delete mine[id];lsSet('pc:sites',mine);
+}
+function linkRow(box,id){
+  var r=el('div','linkrow'),inp=el('input'),cp=el('button',null,'Copy');
+  inp.type='text';inp.readOnly=true;inp.value=siteLink(id);
+  cp.addEventListener('click',function(){
+    var done=function(){cp.textContent='Copied';setTimeout(function(){cp.textContent='Copy'},1500)};
+    try{navigator.clipboard.writeText(inp.value).then(done,function(){inp.select()})}catch(e){inp.select()}
+  });
+  r.appendChild(inp);r.appendChild(cp);box.appendChild(r);
+}
+$('btnPublish').addEventListener('click',function(){
+  openModal(function(box,close){
+    box.appendChild(el('h2',null,(S.siteId&&mySites()[S.siteId])?'Update your published site':'Publish your site'));
+    var st=el('p',null,'Starting...');box.appendChild(st);
+    var btns=el('div','btns'),done=el('button',null,'Close');done.addEventListener('click',function(){close(null)});btns.appendChild(done);
+    publishSite(function(t){st.textContent=t}).then(function(id){
+      if(linkWorks()){st.textContent='Published. Anyone with this link can open your site:';linkRow(box,id)}
+      else st.textContent='Your site is saved (code '+id+'), but there is no link to share yet. Pagecraft is running inside another site\'s editor, so it has no web address of its own. Put this Pagecraft index.html on a host once, and every Publish will give a link anyone can open.';
+      var fb=el('button','primary','Open full screen');fb.addEventListener('click',function(){close(null);openFull()});box.appendChild(fb);
+      box.appendChild(el('p',null,'Publishing again from this browser updates the same link.'));
+      box.appendChild(btns);
+    },function(e){st.textContent=errText(e);st.style.color='var(--bad)';box.appendChild(btns)});
+  });
+});
+$('btnSites').addEventListener('click',function(){
+  openModal(function(box,close){
+    box.appendChild(el('h2',null,'My published sites'));
+    var body=el('div');box.appendChild(body);
+    var btns=el('div','btns'),done=el('button',null,'Close');done.addEventListener('click',function(){close(null)});btns.appendChild(done);box.appendChild(btns);
+    (function draw(){
+      var mine=mySites(),ids=Object.keys(mine).sort(function(a,b){return (mine[b].updated||0)-(mine[a].updated||0)});
+      body.textContent='';
+      if(!ids.length){body.appendChild(el('p',null,'Nothing published from this browser yet. Press Publish to get your first link.'));return}
+      ids.forEach(function(id){
+        var r=el('div','site'),nm=el('div','nm');
+        nm.appendChild(el('b',null,mine[id].name||'Site'));
+        nm.appendChild(el('span',null,'#site-'+id+' - '+new Date(mine[id].updated||0).toLocaleDateString()+(id===S.siteId?' - open in editor':'')));
+        var bl=el('button',null,'Link'),be=el('button',null,'Edit'),bd=el('button',null,'Delete');
+        bl.addEventListener('click',function(){var n=r.nextSibling;if(n&&n.className==='linkrow'){n.remove();return}var h=el('div');linkRow(h,id);r.parentNode.insertBefore(h.firstChild,r.nextSibling)});
+        be.addEventListener('click',function(){
+          be.disabled=true;be.textContent='...';
+          loadSite(id).then(function(site){
+            if(!site){be.textContent='Gone';return}
+            S={name:site.name,siteId:id,open:'index.html',folders:[],files:site.files};previewPath=null;
+            $('projName').value=S.name;close(null);openFile('index.html');
+          },function(){be.disabled=false;be.textContent='Edit'});
+        });
+        bd.addEventListener('click',function(){
+          if(bd.textContent!=='Sure?'){bd.textContent='Sure?';bd.className='danger';return}
+          bd.disabled=true;bd.textContent='...';
+          deleteSite(id).then(function(){if(S.siteId===id){S.siteId=null;save()}draw()},function(){bd.textContent='Failed'});
+        });
+        r.appendChild(nm);r.appendChild(bl);r.appendChild(be);r.appendChild(bd);body.appendChild(r);
+      });
+    })();
+  });
+});
+$('btnNew').addEventListener('click',function(){
+  ask({title:'Start a new project?',text:'The files in the editor are replaced with a fresh starter. Anything you already published stays online and can be reopened from My sites.',ok:'New project',danger:true}).then(function(v){
+    if(!v)return;S=starter();previewPath=null;$('projName').value=S.name;previewLS={};lsSet('pc:ls:preview',previewLS);openFile('index.html');
+  });
+});
+
+/* ---------- full screen: the site alone, covering the editor (no new tab, no link) ---------- */
+function openFull(){
+  if(!S.files['index.html']){ask({title:'No index.html',text:'Add an index.html first - that is the page that opens.',ok:'OK'});return}
+  routeN++;viewing={id:'preview',files:S.files,path:'index.html',ls:previewLS};
+  document.body.classList.add('viewing');$('viewMsg').style.display='none';
+  $('viewFrame').srcdoc=bundle(S.files,'index.html',previewLS);
+  $('viewEdit').textContent='Back to editor';$('viewEdit').style.display='block';
+  /* fill the whole screen when the browser allows it; otherwise the site still covers the editor */
+  try{var v=$('viewer'),fs=v.requestFullscreen||v.webkitRequestFullscreen;if(fs){var pr=fs.call(v);if(pr&&pr.catch)pr.catch(function(){})}}catch(e){}
+}
+$('btnFull').addEventListener('click',openFull);
+
+/* ---------- small UI wiring ---------- */
+$('projName').value=S.name||'';
+$('projName').addEventListener('input',function(){S.name=$('projName').value;save()});
+$('btnRun').addEventListener('click',function(){run();setTab('preview')});
+$('logClear').addEventListener('click',clearLogs);
+$('logToggle').addEventListener('click',function(){var c=$('console').classList.toggle('closed');$('logToggle').textContent=c?'Show':'Hide'});
+function setTab(t){
+  document.body.setAttribute('data-tab',t);
+  Array.prototype.slice.call(document.querySelectorAll('#tabs button')).forEach(function(b){b.classList.toggle('on',b.getAttribute('data-tab')===t)});
+}
+Array.prototype.slice.call(document.querySelectorAll('#tabs button')).forEach(function(b){b.addEventListener('click',function(){setTab(b.getAttribute('data-tab'))})});
+
+/* ---------- viewer mode: #site-<id> shows a published site full screen ---------- */
+var routeN=0;
+function viewMsg(text,withBack){
+  var m=$('viewMsg');m.textContent='';m.style.display='flex';m.appendChild(el('div',null,text));
+  if(withBack){var b=el('button',null,'Open the editor');b.addEventListener('click',function(){location.hash=''});m.appendChild(b)}
+}
+function route(){
+  var m=/^#site-([a-z0-9]{4,20})$/.exec(location.hash||''),n=++routeN;
+  if(!m){viewing=null;document.body.classList.remove('viewing');$('viewFrame').srcdoc='';return}
+  var id=m[1];document.body.classList.add('viewing');$('viewEdit').style.display='none';viewMsg('Loading site...');
+  var slow=setTimeout(function(){if(n===routeN)viewMsg('Still loading... the site cannot be reached yet.',true)},10000);
+  (dbReady()?loadSite(id):Promise.reject({view:'Publishing is not set up on this copy of Pagecraft yet.'})).then(function(site){
+    clearTimeout(slow);if(n!==routeN)return;
+    if(!site||!site.files['index.html']){viewMsg('This site does not exist, or it was deleted.',true);return}
+    viewing={id:id,files:site.files,path:'index.html',ls:lsGet('pc:ls:'+id)||{}};
+    $('viewFrame').srcdoc=bundle(site.files,'index.html',viewing.ls);
+    $('viewMsg').style.display='none';
+    if(mySites()[id])$('viewEdit').style.display='block';
+  }).catch(function(e){clearTimeout(slow);if(n===routeN)viewMsg((e&&e.view)||'This site could not be loaded. Try again in a moment.',true)});
+}
+$('viewEdit').addEventListener('click',function(){if(viewing&&viewing.id==='preview'){try{if(document.fullscreenElement)document.exitFullscreen()}catch(e){}viewing=null;document.body.classList.remove('viewing');$('viewFrame').srcdoc='';return}location.hash=''});
+window.addEventListener('hashchange',route);
+
+openFile(S.open);
+$('saveState').textContent='';
+idbGet('project').then(function(p){
+  if(p&&p.files&&typeof p.files==='object'&&(p.savedAt||0)>(S.savedAt||0)){
+    S=p;if(!Array.isArray(S.folders))S.folders=[];previewPath=null;$('projName').value=S.name||'';openFile(S.open);
+  }
+},function(){});
+route();
+})();
+</script>
+</body>
+</html>
